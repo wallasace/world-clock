@@ -1,17 +1,18 @@
 # World Clock
 
-A minimalist desktop clock for Linux (KDE Plasma) that shows the time of a chosen country side by side with Brasília time, including the time zone and the hour difference between the two.
+A minimalist desktop clock for Linux (KDE Plasma) that shows the time of a chosen country side by side with a home country's time (Brazil by default), including the time zone and the hour difference between the two.
 
 ![World Clock screenshot](docs/screenshot.png)
 
 ## Features
 
-- Real-time clock for the selected country, next to Brazil's time
+- Real-time clock for the selected target country, next to your chosen home country's time
+- Both the target and the home country can be changed independently
 - Time zone (UTC±X) and hour difference calculated automatically (accounts for daylight saving time)
 - About 40 pre-loaded countries, each with a flag, in a searchable picker
 - Dark, minimalist design with rounded corners and a soft shadow
 - Borderless, draggable window, optionally always on top
-- Remembers the last selected country between runs
+- Remembers both selections between runs
 
 ## Requirements
 
@@ -33,7 +34,8 @@ pip install -r requirements.txt
 python3 world_clock.py
 ```
 
-- Click the country name (dashed underline) to change the country
+- Click the target country name (top right, large) to change which country's time is shown on the big clock
+- Click the home country name (bottom right, smaller) to change the country you're comparing against
 - Click and drag any empty area of the window to move it
 - Click the "×" in the top-right corner to close
 

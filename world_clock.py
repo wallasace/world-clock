@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimalist world clock: selected country's time vs. Brazil's time."""
+"""Minimalist world clock: compares the time of two countries you choose."""
 import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -16,9 +16,8 @@ def flag_emoji(country_code: str) -> str:
     return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in country_code.upper())
 
 
-BRAZIL_TZ = ZoneInfo("America/Sao_Paulo")
-BRAZIL_CODE = "BR"
-BRAZIL_LABEL = f"{flag_emoji(BRAZIL_CODE)}  Brazil (Brasília)"
+DEFAULT_ORIGIN_TZ = "America/Sao_Paulo"
+DEFAULT_TARGET_TZ = "Europe/Lisbon"
 
 # (display name, IANA tz, ISO country code for the flag)
 COUNTRIES = [
@@ -26,6 +25,7 @@ COUNTRIES = [
     ("Australia (Sydney)", "Australia/Sydney", "AU"),
     ("Austria", "Europe/Vienna", "AT"),
     ("Belgium", "Europe/Brussels", "BE"),
+    ("Brazil (Brasília)", "America/Sao_Paulo", "BR"),
     ("Canada (Toronto)", "America/Toronto", "CA"),
     ("Chile", "America/Santiago", "CL"),
     ("China", "Asia/Shanghai", "CN"),
@@ -60,8 +60,8 @@ COUNTRIES = [
     ("Turkey", "Europe/Istanbul", "TR"),
     ("United Arab Emirates", "Asia/Dubai", "AE"),
     ("United Kingdom", "Europe/London", "GB"),
-    ("United States (Los Angeles)", "America/Los_Angeles", "US"),
-    ("United States (New York)", "America/New_York", "US"),
+    ("USA (Los Angeles)", "America/Los_Angeles", "US"),
+    ("USA (New York)", "America/New_York", "US"),
     ("Vietnam", "Asia/Ho_Chi_Minh", "VN"),
 ]
 
@@ -86,8 +86,8 @@ def format_offset(dt: datetime) -> str:
     return f"UTC{sign}{h}" + (f":{m:02d}" if m else "")
 
 
-def format_diff(dt_target: datetime, dt_brazil: datetime) -> str:
-    delta_minutes = int((dt_target.utcoffset() - dt_brazil.utcoffset()).total_seconds() // 60)
+def format_diff(dt_target: datetime, dt_origin: datetime) -> str:
+    delta_minutes = int((dt_target.utcoffset() - dt_origin.utcoffset()).total_seconds() // 60)
     sign = "+" if delta_minutes >= 0 else "-"
     delta_minutes = abs(delta_minutes)
     h, m = divmod(delta_minutes, 60)
@@ -103,16 +103,56 @@ def format_date(dt: datetime) -> str:
     return f"{WEEKDAYS_EN[dt.weekday()]}, {MONTHS_EN[dt.month - 1]} {dt.day}"
 
 
+def combo_style(text_color: str) -> str:
+    return f"""
+        QComboBox {{
+            color: {text_color};
+            background: transparent;
+            border: none;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.28);
+            padding: 2px 0 5px 0;
+        }}
+        QComboBox:hover {{
+            color: {ACCENT};
+            border-bottom: 1px dashed {ACCENT};
+        }}
+        QComboBox::drop-down {{ width: 0; border: none; }}
+        QComboBox QAbstractItemView {{
+            background: {BG_CARD_TOP};
+            color: {TEXT_PRIMARY};
+            border: 1px solid {BORDER};
+            border-radius: 10px;
+            selection-background-color: {ACCENT_SOFT};
+            outline: none;
+            padding: 6px;
+        }}
+    """
+
+
+def make_country_combo(font_size: int, text_color: str) -> QComboBox:
+    combo = QComboBox()
+    combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+    for name, tz, code in COUNTRIES:
+        combo.addItem(f"{flag_emoji(code)}  {name}", (tz, code))
+    combo.setFont(QFont("Noto Sans", font_size, QFont.DemiBold))
+    combo.setCursor(QCursor(Qt.PointingHandCursor))
+    combo.setToolTip("Click to change country")
+    combo.setStyleSheet(combo_style(text_color))
+    combo.view().setFont(combo.font())
+    combo.view().setMinimumWidth(combo.view().sizeHintForColumn(0) + 30)
+    return combo
+
+
 class WorldClock(QWidget):
     def __init__(self):
         super().__init__()
         self.settings = QSettings("aceaswall", "WorldClock")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(612, 314)
+        self.setFixedSize(660, 314)
         self._drag_pos = None
         self._build_ui()
-        self._restore_selection()
+        self._restore_selections()
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
@@ -177,7 +217,7 @@ class WorldClock(QWidget):
         body = QHBoxLayout()
         body.setSpacing(28)
 
-        # ---- left: selected country big clock ----
+        # ---- left: target country big clock ----
         left = QVBoxLayout()
         left.setSpacing(6)
         left.addStretch()
@@ -200,43 +240,14 @@ class WorldClock(QWidget):
         divider.setStyleSheet(f"background: {BORDER}; max-width: 1px; border: none;")
         body.addWidget(divider)
 
-        # ---- right: country picker + brazil info ----
+        # ---- right: target country picker + origin country picker ----
         right = QVBoxLayout()
         right.setSpacing(10)
         right.addStretch()
 
-        self.country_combo = QComboBox()
-        self.country_combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
-        for name, tz, code in COUNTRIES:
-            self.country_combo.addItem(f"{flag_emoji(code)}  {name}", (tz, code))
-        self.country_combo.setFont(QFont("Noto Sans", 15, QFont.DemiBold))
-        self.country_combo.setCursor(QCursor(Qt.PointingHandCursor))
-        self.country_combo.setToolTip("Click to change country")
-        self.country_combo.setStyleSheet(f"""
-            QComboBox {{
-                color: {TEXT_PRIMARY};
-                background: transparent;
-                border: none;
-                border-bottom: 1px dashed rgba(255, 255, 255, 0.28);
-                padding: 2px 0 5px 0;
-            }}
-            QComboBox:hover {{
-                color: {ACCENT};
-                border-bottom: 1px dashed {ACCENT};
-            }}
-            QComboBox::drop-down {{ width: 0; border: none; }}
-            QComboBox QAbstractItemView {{
-                background: {BG_CARD_TOP};
-                color: {TEXT_PRIMARY};
-                border: 1px solid {BORDER};
-                border-radius: 10px;
-                selection-background-color: {ACCENT_SOFT};
-                outline: none;
-                padding: 6px;
-            }}
-        """)
-        self.country_combo.currentIndexChanged.connect(self._save_selection)
-        right.addWidget(self.country_combo, 0, Qt.AlignLeft)
+        self.target_combo = make_country_combo(15, TEXT_PRIMARY)
+        self.target_combo.currentIndexChanged.connect(self._save_target)
+        right.addWidget(self.target_combo, 0, Qt.AlignLeft)
 
         self.offset_label = QLabel("UTC+0")
         self.offset_label.setFont(QFont("Noto Sans Mono", 10))
@@ -245,18 +256,17 @@ class WorldClock(QWidget):
 
         right.addSpacing(6)
 
-        brazil_row = QHBoxLayout()
-        brazil_row.setSpacing(8)
-        brazil_label = QLabel(BRAZIL_LABEL)
-        brazil_label.setFont(QFont("Noto Sans", 11))
-        brazil_label.setStyleSheet(f"color: {TEXT_MUTED};")
-        brazil_row.addWidget(brazil_label)
-        brazil_row.addStretch()
-        self.brazil_time_label = QLabel("--:--")
-        self.brazil_time_label.setFont(QFont("Noto Sans Mono", 13, QFont.DemiBold))
-        self.brazil_time_label.setStyleSheet(f"color: {TEXT_PRIMARY};")
-        brazil_row.addWidget(self.brazil_time_label)
-        right.addLayout(brazil_row)
+        origin_row = QHBoxLayout()
+        origin_row.setSpacing(8)
+        self.origin_combo = make_country_combo(11, TEXT_MUTED)
+        self.origin_combo.currentIndexChanged.connect(self._save_origin)
+        origin_row.addWidget(self.origin_combo)
+        origin_row.addStretch()
+        self.origin_time_label = QLabel("--:--")
+        self.origin_time_label.setFont(QFont("Noto Sans Mono", 13, QFont.DemiBold))
+        self.origin_time_label.setStyleSheet(f"color: {TEXT_PRIMARY};")
+        origin_row.addWidget(self.origin_time_label)
+        right.addLayout(origin_row)
 
         self.diff_badge = QLabel("+0h")
         self.diff_badge.setFont(QFont("Noto Sans", 11, QFont.DemiBold))
@@ -276,35 +286,41 @@ class WorldClock(QWidget):
         root.addLayout(body)
 
     # ---------- persistence ----------
-    def _restore_selection(self):
-        saved_tz = self.settings.value("tz", "Europe/Lisbon")
-        idx = self.country_combo.findData(saved_tz, role=Qt.UserRole,
-                                           flags=Qt.MatchExactly)
-        if idx < 0:
-            for i in range(self.country_combo.count()):
-                if self.country_combo.itemData(i)[0] == saved_tz:
-                    idx = i
-                    break
-        self.country_combo.setCurrentIndex(idx if idx >= 0 else 0)
+    @staticmethod
+    def _find_tz_index(combo: QComboBox, tz: str) -> int:
+        for i in range(combo.count()):
+            if combo.itemData(i)[0] == tz:
+                return i
+        return -1
 
-    def _save_selection(self):
-        tz, _code = self.country_combo.currentData()
-        self.settings.setValue("tz", tz)
+    def _restore_selections(self):
+        origin_tz = self.settings.value("origin_tz", DEFAULT_ORIGIN_TZ)
+        target_tz = self.settings.value("target_tz", DEFAULT_TARGET_TZ)
+        self.origin_combo.setCurrentIndex(max(self._find_tz_index(self.origin_combo, origin_tz), 0))
+        self.target_combo.setCurrentIndex(max(self._find_tz_index(self.target_combo, target_tz), 0))
+
+    def _save_origin(self):
+        tz, _code = self.origin_combo.currentData()
+        self.settings.setValue("origin_tz", tz)
+
+    def _save_target(self):
+        tz, _code = self.target_combo.currentData()
+        self.settings.setValue("target_tz", tz)
 
     # ---------- clock update ----------
     def _tick(self):
-        tz_name, _code = self.country_combo.currentData()
-        target_tz = ZoneInfo(tz_name)
+        origin_tz_name, _code = self.origin_combo.currentData()
+        target_tz_name, _code = self.target_combo.currentData()
 
         now_utc = datetime.now(ZoneInfo("UTC"))
-        now_target = now_utc.astimezone(target_tz)
-        now_brazil = now_utc.astimezone(BRAZIL_TZ)
+        now_target = now_utc.astimezone(ZoneInfo(target_tz_name))
+        now_origin = now_utc.astimezone(ZoneInfo(origin_tz_name))
 
         self.time_label.setText(now_target.strftime("%H:%M"))
         self.date_label.setText(format_date(now_target))
-        self.brazil_time_label.setText(now_brazil.strftime("%H:%M"))
+        self.origin_time_label.setText(now_origin.strftime("%H:%M"))
         self.offset_label.setText(format_offset(now_target))
-        self.diff_badge.setText(format_diff(now_target, now_brazil))
+        self.diff_badge.setText(format_diff(now_target, now_origin))
 
     # ---------- drag to move (frameless window) ----------
     # On Wayland, QWidget.move() does not reposition borderless windows: the
