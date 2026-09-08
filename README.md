@@ -8,6 +8,7 @@ A minimalist desktop clock for Linux (KDE Plasma) that shows the time of a chose
 
 - Real-time clock for the selected target country, next to your chosen home country's time
 - Both the target and the home country can be changed independently
+- Smart search: type any part of a country's (or city's) name to filter the list — "sydney" finds Australia (Sydney), not just names starting with it
 - Time zone (UTC±X) shown for both countries, plus the hour difference between them, calculated automatically (accounts for daylight saving time)
 - About 40 pre-loaded countries, each with a flag, in a searchable picker
 - Dark, minimalist design with rounded corners and a soft shadow
@@ -34,8 +35,9 @@ pip install -r requirements.txt
 python3 world_clock.py
 ```
 
-- Click the target country name (top right, large) to change which country's time is shown on the big clock
-- Click the home country name (bottom right, smaller) to change the country you're comparing against
+- Click the target country field (top right, large) and start typing to search — matches anywhere in the name, not just the start
+- Click the home country field (bottom right, smaller) to search and change the country you're comparing against
+- Click the "⌄" next to either field to browse the full, unfiltered country list
 - Click and drag any empty area of the window to move it
 - Click the "×" in the top-right corner to close
 

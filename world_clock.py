@@ -4,11 +4,11 @@ import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from PySide6.QtCore import Qt, QTimer, QSettings
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, QSettings, Signal
 from PySide6.QtGui import QFont, QColor, QCursor
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QComboBox, QPushButton, QGraphicsDropShadowEffect, QFrame,
+    QApplication, QCompleter, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
+    QComboBox, QPushButton, QGraphicsDropShadowEffect, QFrame, QSizePolicy,
 )
 
 
@@ -129,6 +129,71 @@ def combo_style(text_color: str) -> str:
     """
 
 
+def popup_style() -> str:
+    return f"""
+        background: {BG_CARD_TOP};
+        color: {TEXT_PRIMARY};
+        border: 1px solid {BORDER};
+        border-radius: 10px;
+        selection-background-color: {ACCENT_SOFT};
+        outline: none;
+        padding: 6px;
+    """
+
+
+class ClickableLabel(QLabel):
+    clicked = Signal()
+
+    def __init__(self, text):
+        super().__init__(text)
+        self.setCursor(QCursor(Qt.PointingHandCursor))
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+
+def combo_row(combo: QComboBox, text_color: str) -> QHBoxLayout:
+    """A [search field][⌄] row — the label opens the full, unfiltered list,
+    since the field itself is busy being an editable search box."""
+    row = QHBoxLayout()
+    row.setSpacing(10)
+    combo.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+    row.addWidget(combo)
+    chevron = ClickableLabel("⌄")
+    chevron.setFont(combo.font())
+    chevron.setStyleSheet(f"color: {text_color};")
+    chevron.setToolTip("Browse all countries")
+    chevron.clicked.connect(combo.showPopup)
+    row.addWidget(chevron)
+    row.addStretch()
+    return row
+
+
+class _ComboSearchFocusHandler(QObject):
+    """Selects all text when the search field gains focus, and snaps back to a
+    valid country when it loses focus without a completion being picked."""
+
+    def __init__(self, combo: QComboBox):
+        super().__init__(combo)
+        self._combo = combo
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.FocusIn:
+            QTimer.singleShot(0, obj.selectAll)
+        elif event.type() == QEvent.FocusOut:
+            self._revert_if_invalid()
+        return False
+
+    def _revert_if_invalid(self):
+        combo = self._combo
+        idx = combo.findText(combo.currentText(), Qt.MatchFixedString)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+        combo.lineEdit().setText(combo.itemText(combo.currentIndex()))
+
+
 def make_country_combo(font_size: int, text_color: str) -> QComboBox:
     combo = QComboBox()
     combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
@@ -136,10 +201,44 @@ def make_country_combo(font_size: int, text_color: str) -> QComboBox:
         combo.addItem(f"{flag_emoji(code)}  {name}", (tz, code))
     combo.setFont(QFont("Noto Sans", font_size, QFont.DemiBold))
     combo.setCursor(QCursor(Qt.PointingHandCursor))
-    combo.setToolTip("Click to change country")
+    combo.setToolTip("Type to search, or click the arrow to browse all countries")
     combo.setStyleSheet(combo_style(text_color))
     combo.view().setFont(combo.font())
-    combo.view().setMinimumWidth(combo.view().sizeHintForColumn(0) + 30)
+    content_width = combo.view().sizeHintForColumn(0)
+    combo.view().setMinimumWidth(content_width + 30)
+
+    # Editable + a "contains" completer turns the picker into a smart search:
+    # typing "sydney" finds Australia (Sydney), not just names starting with it.
+    combo.setEditable(True)
+    combo.setInsertPolicy(QComboBox.NoInsert)
+    line_edit = combo.lineEdit()
+    line_edit.setFrame(False)
+    line_edit.setStyleSheet("background: transparent; border: none;")
+    focus_handler = _ComboSearchFocusHandler(combo)
+    line_edit.installEventFilter(focus_handler)
+
+    completer = QCompleter([combo.itemText(i) for i in range(combo.count())], combo)
+    completer.setCaseSensitivity(Qt.CaseInsensitive)
+    completer.setFilterMode(Qt.MatchContains)
+    completer.setCompletionMode(QCompleter.PopupCompletion)
+    completer.popup().setFont(combo.font())
+    completer.popup().setStyleSheet(popup_style())
+    completer.popup().setMinimumWidth(combo.view().minimumWidth())
+
+    def commit(text):
+        idx = combo.findText(text, Qt.MatchFixedString)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+
+    completer.activated[str].connect(commit)
+    combo.setCompleter(completer)
+    line_edit.editingFinished.connect(focus_handler._revert_if_invalid)
+
+    # AdjustToContents under-measures editable combos with emoji glyphs
+    # (font fallback renders the flag wider than QFontMetrics predicts), so
+    # pin the width explicitly using the same measurement as the popup.
+    combo.setMinimumWidth(content_width + 20)
+
     return combo
 
 
@@ -149,7 +248,7 @@ class WorldClock(QWidget):
         self.settings = QSettings("aceaswall", "WorldClock")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(660, 356)
+        self.setFixedSize(696, 356)
         self._drag_pos = None
         self._build_ui()
         self._restore_selections()
@@ -247,7 +346,7 @@ class WorldClock(QWidget):
 
         self.target_combo = make_country_combo(15, TEXT_PRIMARY)
         self.target_combo.currentIndexChanged.connect(self._save_target)
-        right.addWidget(self.target_combo, 0, Qt.AlignLeft)
+        right.addLayout(combo_row(self.target_combo, TEXT_PRIMARY))
 
         self.target_offset_label = QLabel("UTC+0")
         self.target_offset_label.setFont(QFont("Noto Sans Mono", 10))
@@ -258,7 +357,7 @@ class WorldClock(QWidget):
 
         self.origin_combo = make_country_combo(11, TEXT_MUTED)
         self.origin_combo.currentIndexChanged.connect(self._save_origin)
-        right.addWidget(self.origin_combo, 0, Qt.AlignLeft)
+        right.addLayout(combo_row(self.origin_combo, TEXT_MUTED))
 
         origin_row = QHBoxLayout()
         origin_row.setSpacing(8)
