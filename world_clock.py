@@ -451,6 +451,9 @@ class WorldClock(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setFixedSize(696, 356)
         self._drag_pos = None
+        self._now_target = None
+        self._now_origin = None
+        self._colon_visible = True
         self._build_ui()
         self._restore_selections()
 
@@ -458,6 +461,14 @@ class WorldClock(QWidget):
         self.timer.timeout.connect(self._tick)
         self.timer.start(1000)
         self._tick()
+
+        # A separate, faster timer just for the blink: the main clock still
+        # only needs to recompute the actual time once a second, but the
+        # blink needs to toggle twice in that time (on, then off) to read as
+        # a "seconds are passing" pulse rather than a slow flash.
+        self.blink_timer = QTimer(self)
+        self.blink_timer.timeout.connect(self._toggle_colon)
+        self.blink_timer.start(500)
 
     # ---------- UI ----------
     def _build_ui(self):
@@ -626,12 +637,24 @@ class WorldClock(QWidget):
         now_target = now_utc.astimezone(ZoneInfo(target_tz_name))
         now_origin = now_utc.astimezone(ZoneInfo(origin_tz_name))
 
-        self.time_label.setText(now_target.strftime("%H:%M"))
+        self._now_target = now_target
+        self._now_origin = now_origin
+        self._render_clocks()
         self.date_label.setText(format_date(now_target))
-        self.origin_time_label.setText(now_origin.strftime("%H:%M"))
         self.target_offset_label.setText(format_offset(now_target))
         self.origin_offset_label.setText(format_offset(now_origin))
         self.diff_badge.setText(format_diff(now_target, now_origin))
+
+    def _toggle_colon(self):
+        self._colon_visible = not self._colon_visible
+        self._render_clocks()
+
+    def _render_clocks(self):
+        separator = ":" if self._colon_visible else " "
+        if self._now_target is not None:
+            self.time_label.setText(self._now_target.strftime(f"%H{separator}%M"))
+        if self._now_origin is not None:
+            self.origin_time_label.setText(self._now_origin.strftime(f"%H{separator}%M"))
 
     # ---------- drag to move (frameless window) ----------
     # On Wayland, QWidget.move() does not reposition borderless windows: the
