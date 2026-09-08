@@ -149,7 +149,7 @@ class WorldClock(QWidget):
         self.settings = QSettings("aceaswall", "WorldClock")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(660, 314)
+        self.setFixedSize(660, 356)
         self._drag_pos = None
         self._build_ui()
         self._restore_selections()
@@ -249,18 +249,23 @@ class WorldClock(QWidget):
         self.target_combo.currentIndexChanged.connect(self._save_target)
         right.addWidget(self.target_combo, 0, Qt.AlignLeft)
 
-        self.offset_label = QLabel("UTC+0")
-        self.offset_label.setFont(QFont("Noto Sans Mono", 10))
-        self.offset_label.setStyleSheet(f"color: {TEXT_MUTED};")
-        right.addWidget(self.offset_label)
+        self.target_offset_label = QLabel("UTC+0")
+        self.target_offset_label.setFont(QFont("Noto Sans Mono", 10))
+        self.target_offset_label.setStyleSheet(f"color: {TEXT_MUTED};")
+        right.addWidget(self.target_offset_label)
 
         right.addSpacing(6)
 
-        origin_row = QHBoxLayout()
-        origin_row.setSpacing(8)
         self.origin_combo = make_country_combo(11, TEXT_MUTED)
         self.origin_combo.currentIndexChanged.connect(self._save_origin)
-        origin_row.addWidget(self.origin_combo)
+        right.addWidget(self.origin_combo, 0, Qt.AlignLeft)
+
+        origin_row = QHBoxLayout()
+        origin_row.setSpacing(8)
+        self.origin_offset_label = QLabel("UTC+0")
+        self.origin_offset_label.setFont(QFont("Noto Sans Mono", 10))
+        self.origin_offset_label.setStyleSheet(f"color: {TEXT_MUTED};")
+        origin_row.addWidget(self.origin_offset_label)
         origin_row.addStretch()
         self.origin_time_label = QLabel("--:--")
         self.origin_time_label.setFont(QFont("Noto Sans Mono", 13, QFont.DemiBold))
@@ -319,7 +324,8 @@ class WorldClock(QWidget):
         self.time_label.setText(now_target.strftime("%H:%M"))
         self.date_label.setText(format_date(now_target))
         self.origin_time_label.setText(now_origin.strftime("%H:%M"))
-        self.offset_label.setText(format_offset(now_target))
+        self.target_offset_label.setText(format_offset(now_target))
+        self.origin_offset_label.setText(format_offset(now_origin))
         self.diff_badge.setText(format_diff(now_target, now_origin))
 
     # ---------- drag to move (frameless window) ----------
