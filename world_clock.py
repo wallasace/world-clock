@@ -149,22 +149,62 @@ class ClickableLabel(QLabel):
         self.setCursor(QCursor(Qt.PointingHandCursor))
 
     def mousePressEvent(self, event):
+        # Accept (don't let it bubble up) so the parent window's
+        # click-anywhere-to-drag handler doesn't start a system move on us.
         if event.button() == Qt.LeftButton:
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        # Fire on release, like QPushButton — emitting on press instead let
+        # combo.showPopup() open the dropdown *while the button was still
+        # down*, so the very next release landed on the popup and closed it.
+        if event.button() == Qt.LeftButton and self.rect().contains(event.pos()):
             self.clicked.emit()
-        super().mousePressEvent(event)
+        super().mouseReleaseEvent(event)
+
+
+def flag_for_text(text: str) -> str:
+    """The flag for the country matching `text` (exact match wins over a
+    "contains" match), or "" if nothing matches — e.g. an empty field."""
+    query = text.strip().lower()
+    if not query:
+        return ""
+    for name, _tz, code in COUNTRIES:
+        if name.lower() == query:
+            return flag_emoji(code)
+    for name, _tz, code in COUNTRIES:
+        if query in name.lower():
+            return flag_emoji(code)
+    return ""
 
 
 def combo_row(combo: QComboBox, text_color: str) -> QHBoxLayout:
-    """A [search field][⌄] row — the label opens the full, unfiltered list,
-    since the field itself is busy being an editable search box."""
+    """A [flag][search field][⌄] row. The flag is a separate, read-only label
+    that tracks the typed text, so deleting the country name doesn't leave a
+    stray flag glyph behind (or vice versa). The "⌄" opens the full,
+    unfiltered list, since the field itself is busy being a search box."""
     row = QHBoxLayout()
-    row.setSpacing(10)
+    row.setSpacing(8)
+
+    flag_label = QLabel()
+    flag_label.setFont(combo.font())
+    row.addWidget(flag_label)
+
+    def sync_flag(text):
+        flag_label.setText(flag_for_text(text))
+
+    combo.lineEdit().textChanged.connect(sync_flag)
+    sync_flag(combo.currentText())
+
     combo.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
     row.addWidget(combo)
     chevron = ClickableLabel("⌄")
     chevron.setFont(combo.font())
     chevron.setStyleSheet(f"color: {text_color};")
     chevron.setToolTip("Browse all countries")
+
     chevron.clicked.connect(combo.showPopup)
     row.addWidget(chevron)
     row.addStretch()
@@ -183,7 +223,11 @@ class _ComboSearchFocusHandler(QObject):
         if event.type() == QEvent.FocusIn:
             QTimer.singleShot(0, obj.selectAll)
         elif event.type() == QEvent.FocusOut:
-            self._revert_if_invalid()
+            # Focus also "leaves" the line edit when its own popup opens
+            # (reason == PopupFocusReason) — reverting the text here would
+            # rewrite it mid-open and the popup would immediately snap shut.
+            if event.reason() != Qt.PopupFocusReason:
+                self._revert_if_invalid()
         return False
 
     def _revert_if_invalid(self):
@@ -198,7 +242,7 @@ def make_country_combo(font_size: int, text_color: str) -> QComboBox:
     combo = QComboBox()
     combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
     for name, tz, code in COUNTRIES:
-        combo.addItem(f"{flag_emoji(code)}  {name}", (tz, code))
+        combo.addItem(name, (tz, code))
     combo.setFont(QFont("Noto Sans", font_size, QFont.DemiBold))
     combo.setCursor(QCursor(Qt.PointingHandCursor))
     combo.setToolTip("Type to search, or click the arrow to browse all countries")
@@ -246,7 +290,11 @@ class WorldClock(QWidget):
     def __init__(self):
         super().__init__()
         self.settings = QSettings("aceaswall", "WorldClock")
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        # Qt.Tool and Qt.WindowStaysOnTopHint are deliberately avoided here: on
+        # KWin/Wayland they change how the window's surface is presented in a
+        # way that breaks popups (QComboBox's dropdown, QCompleter's popup)
+        # parented to it — clicks and typing worked, but no popup ever showed.
+        self.setWindowFlags(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setFixedSize(696, 356)
         self._drag_pos = None
