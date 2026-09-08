@@ -2,7 +2,7 @@
 
 A minimalist desktop clock that shows the time of a chosen country side by side with a home country's time (Brazil by default), including the time zone and the hour difference between the two. Originally built for Linux (KDE Plasma); also runs on Windows 11.
 
-![World Clock screenshot](docs/screenshot.png)
+![World Clock demo](docs/world_clock.gif)
 
 ## Features
 
