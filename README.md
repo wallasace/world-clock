@@ -1,74 +1,74 @@
-# Relógio Mundial
+# World Clock
 
-Um relógio de mesa minimalista para Linux (KDE Plasma) que mostra a hora de um país escolhido lado a lado com o horário de Brasília, incluindo o fuso horário e a diferença de horas entre os dois.
+A minimalist desktop clock for Linux (KDE Plasma) that shows the time of a chosen country side by side with Brasília time, including the time zone and the hour difference between the two.
 
-![Screenshot do Relógio Mundial](docs/screenshot.png)
+![World Clock screenshot](docs/screenshot.png)
 
-## Funcionalidades
+## Features
 
-- Hora em tempo real do país selecionado, ao lado da hora de Brasília
-- Fuso horário (UTC±X) e diferença de horas calculados automaticamente (considera horário de verão)
-- Cerca de 40 países pré-cadastrados, com bandeira e busca pelo seletor
-- Design escuro, minimalista, com cantos arredondados e sombra suave
-- Janela sem borda, arrastável, sempre visível por cima das outras (opcional)
-- Lembra o último país escolhido entre uma execução e outra
+- Real-time clock for the selected country, next to Brazil's time
+- Time zone (UTC±X) and hour difference calculated automatically (accounts for daylight saving time)
+- About 40 pre-loaded countries, each with a flag, in a searchable picker
+- Dark, minimalist design with rounded corners and a soft shadow
+- Borderless, draggable window, optionally always on top
+- Remembers the last selected country between runs
 
-## Requisitos
+## Requirements
 
-- Linux com sessão gráfica (testado no Fedora com KDE Plasma / Wayland)
+- Linux with a graphical session (tested on Fedora with KDE Plasma / Wayland)
 - Python 3.9+
 - [PySide6](https://pypi.org/project/PySide6/)
 
-## Instalação
+## Installation
 
 ```bash
-git clone https://github.com/<seu-usuario>/world-clock.git
+git clone https://github.com/<your-username>/world-clock.git
 cd world-clock
 pip install -r requirements.txt
 ```
 
-## Uso
+## Usage
 
 ```bash
 python3 world_clock.py
 ```
 
-- Clique no nome do país (sublinhado tracejado) para trocar o país
-- Clique e arraste em qualquer área vazia da janela para mover
-- Clique no "×" no canto superior direito para fechar
+- Click the country name (dashed underline) to change the country
+- Click and drag any empty area of the window to move it
+- Click the "×" in the top-right corner to close
 
-### Atalho no menu de aplicativos (KDE Plasma)
+### Application menu shortcut (KDE Plasma)
 
-Para abrir pelo menu do Plasma como qualquer outro programa, crie o arquivo `~/.local/share/applications/world-clock.desktop` com o seguinte conteúdo (ajuste o caminho do `Exec` para onde você clonou o projeto):
+To launch it from the Plasma menu like any other app, create `~/.local/share/applications/world-clock.desktop` with the following content (adjust the `Exec` path to wherever you cloned the project):
 
 ```ini
 [Desktop Entry]
 Type=Application
-Name=Relógio Mundial
-Comment=Hora de países do mundo comparada ao horário de Brasília
-Exec=python3 /caminho/completo/para/world-clock/world_clock.py
+Name=World Clock
+Comment=Time in countries around the world compared to Brasília time
+Exec=python3 /full/path/to/world-clock/world_clock.py
 Icon=clock
 Terminal=false
 Categories=Utility;Clock;
 ```
 
-Depois rode `update-desktop-database ~/.local/share/applications` e procure por "Relógio Mundial" no menu.
+Then run `update-desktop-database ~/.local/share/applications` and look for "World Clock" in the menu.
 
-## Adicionando ou removendo países
+## Adding or removing countries
 
-A lista de países fica no início de [world_clock.py](world_clock.py), na constante `COUNTRIES`. Cada item é uma tupla `(nome exibido, fuso IANA, código ISO do país)`:
+The country list lives at the top of [world_clock.py](world_clock.py), in the `COUNTRIES` constant. Each entry is a tuple of `(display name, IANA time zone, ISO country code)`:
 
 ```python
 ("Portugal", "Europe/Lisbon", "PT"),
 ```
 
-O código de duas letras é usado para gerar a bandeira automaticamente — não precisa adicionar emoji manualmente. Fusos horários seguem a [lista de zonas IANA](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
+The two-letter code is used to generate the flag automatically — no need to add emoji by hand. Time zones follow the [IANA time zone database](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
 
-## Tecnologia
+## Tech stack
 
-- [PySide6](https://doc.qt.io/qtforpython/) (Qt6) para a interface
-- `zoneinfo` (biblioteca padrão do Python) para os cálculos de fuso horário
+- [PySide6](https://doc.qt.io/qtforpython/) (Qt6) for the interface
+- `zoneinfo` (Python standard library) for time zone calculations
 
-## Licença
+## License
 
-Distribuído sob a licença MIT. Veja [LICENSE](LICENSE) para mais detalhes.
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.

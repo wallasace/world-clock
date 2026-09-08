@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Relógio mundial minimalista: hora do país selecionado x hora do Brasil."""
+"""Minimalist world clock: selected country's time vs. Brazil's time."""
 import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -18,55 +18,55 @@ def flag_emoji(country_code: str) -> str:
 
 BRAZIL_TZ = ZoneInfo("America/Sao_Paulo")
 BRAZIL_CODE = "BR"
-BRAZIL_LABEL = f"{flag_emoji(BRAZIL_CODE)}  Brasil (Brasília)"
+BRAZIL_LABEL = f"{flag_emoji(BRAZIL_CODE)}  Brazil (Brasília)"
 
-# (nome exibido, tz IANA, código curto para o selo)
+# (display name, IANA tz, ISO country code for the flag)
 COUNTRIES = [
-    ("África do Sul", "Africa/Johannesburg", "ZA"),
-    ("Alemanha", "Europe/Berlin", "DE"),
     ("Argentina", "America/Argentina/Buenos_Aires", "AR"),
-    ("Arábia Saudita", "Asia/Riyadh", "SA"),
-    ("Austrália (Sydney)", "Australia/Sydney", "AU"),
-    ("Áustria", "Europe/Vienna", "AT"),
-    ("Bélgica", "Europe/Brussels", "BE"),
-    ("Canadá (Toronto)", "America/Toronto", "CA"),
+    ("Australia (Sydney)", "Australia/Sydney", "AU"),
+    ("Austria", "Europe/Vienna", "AT"),
+    ("Belgium", "Europe/Brussels", "BE"),
+    ("Canada (Toronto)", "America/Toronto", "CA"),
     ("Chile", "America/Santiago", "CL"),
     ("China", "Asia/Shanghai", "CN"),
-    ("Coreia do Sul", "Asia/Seoul", "KR"),
-    ("Egito", "Africa/Cairo", "EG"),
-    ("Emirados Árabes Unidos", "Asia/Dubai", "AE"),
-    ("Espanha", "Europe/Madrid", "ES"),
-    ("Estados Unidos (Los Angeles)", "America/Los_Angeles", "US"),
-    ("Estados Unidos (Nova York)", "America/New_York", "US"),
-    ("Filipinas", "Asia/Manila", "PH"),
-    ("Finlândia", "Europe/Helsinki", "FI"),
-    ("França", "Europe/Paris", "FR"),
-    ("Grécia", "Europe/Athens", "GR"),
-    ("Holanda", "Europe/Amsterdam", "NL"),
-    ("Índia", "Asia/Kolkata", "IN"),
-    ("Indonésia (Jacarta)", "Asia/Jakarta", "ID"),
-    ("Irlanda", "Europe/Dublin", "IE"),
+    ("Egypt", "Africa/Cairo", "EG"),
+    ("Finland", "Europe/Helsinki", "FI"),
+    ("France", "Europe/Paris", "FR"),
+    ("Germany", "Europe/Berlin", "DE"),
+    ("Greece", "Europe/Athens", "GR"),
+    ("India", "Asia/Kolkata", "IN"),
+    ("Indonesia (Jakarta)", "Asia/Jakarta", "ID"),
+    ("Ireland", "Europe/Dublin", "IE"),
     ("Israel", "Asia/Jerusalem", "IL"),
-    ("Itália", "Europe/Rome", "IT"),
-    ("Japão", "Asia/Tokyo", "JP"),
-    ("México", "America/Mexico_City", "MX"),
-    ("Nigéria", "Africa/Lagos", "NG"),
-    ("Noruega", "Europe/Oslo", "NO"),
-    ("Nova Zelândia", "Pacific/Auckland", "NZ"),
-    ("Polônia", "Europe/Warsaw", "PL"),
+    ("Italy", "Europe/Rome", "IT"),
+    ("Japan", "Asia/Tokyo", "JP"),
+    ("Mexico", "America/Mexico_City", "MX"),
+    ("Netherlands", "Europe/Amsterdam", "NL"),
+    ("New Zealand", "Pacific/Auckland", "NZ"),
+    ("Nigeria", "Africa/Lagos", "NG"),
+    ("Norway", "Europe/Oslo", "NO"),
+    ("Philippines", "Asia/Manila", "PH"),
+    ("Poland", "Europe/Warsaw", "PL"),
     ("Portugal", "Europe/Lisbon", "PT"),
-    ("Reino Unido", "Europe/London", "GB"),
-    ("Rússia (Moscou)", "Europe/Moscow", "RU"),
-    ("Singapura", "Asia/Singapore", "SG"),
-    ("Suécia", "Europe/Stockholm", "SE"),
-    ("Suíça", "Europe/Zurich", "CH"),
-    ("Tailândia", "Asia/Bangkok", "TH"),
-    ("Turquia", "Europe/Istanbul", "TR"),
-    ("Vietnã", "Asia/Ho_Chi_Minh", "VN"),
+    ("Russia (Moscow)", "Europe/Moscow", "RU"),
+    ("Saudi Arabia", "Asia/Riyadh", "SA"),
+    ("Singapore", "Asia/Singapore", "SG"),
+    ("South Africa", "Africa/Johannesburg", "ZA"),
+    ("South Korea", "Asia/Seoul", "KR"),
+    ("Spain", "Europe/Madrid", "ES"),
+    ("Sweden", "Europe/Stockholm", "SE"),
+    ("Switzerland", "Europe/Zurich", "CH"),
+    ("Thailand", "Asia/Bangkok", "TH"),
+    ("Turkey", "Europe/Istanbul", "TR"),
+    ("United Arab Emirates", "Asia/Dubai", "AE"),
+    ("United Kingdom", "Europe/London", "GB"),
+    ("United States (Los Angeles)", "America/Los_Angeles", "US"),
+    ("United States (New York)", "America/New_York", "US"),
+    ("Vietnam", "Asia/Ho_Chi_Minh", "VN"),
 ]
 
-WEEKDAYS_PT = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"]
-MONTHS_PT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+WEEKDAYS_EN = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 ACCENT = "#7C8CFF"
 ACCENT_SOFT = "rgba(124, 140, 255, 0.16)"
@@ -92,7 +92,7 @@ def format_diff(dt_target: datetime, dt_brazil: datetime) -> str:
     delta_minutes = abs(delta_minutes)
     h, m = divmod(delta_minutes, 60)
     if delta_minutes == 0:
-        return "mesma hora"
+        return "same time"
     txt = f"{sign}{h}h"
     if m:
         txt += f"{m:02d}"
@@ -100,7 +100,7 @@ def format_diff(dt_target: datetime, dt_brazil: datetime) -> str:
 
 
 def format_date(dt: datetime) -> str:
-    return f"{WEEKDAYS_PT[dt.weekday()]}, {dt.day} {MONTHS_PT[dt.month - 1]}"
+    return f"{WEEKDAYS_EN[dt.weekday()]}, {MONTHS_EN[dt.month - 1]} {dt.day}"
 
 
 class WorldClock(QWidget):
@@ -145,9 +145,9 @@ class WorldClock(QWidget):
         root.setContentsMargins(28, 20, 20, 24)
         root.setSpacing(0)
 
-        # top bar: dot + "world clock" tag + close button
+        # top bar: title tag + close button
         top_bar = QHBoxLayout()
-        tag = QLabel("RELÓGIO MUNDIAL")
+        tag = QLabel("WORLD CLOCK")
         tag.setStyleSheet(f"color: {TEXT_MUTED}; letter-spacing: 2px;")
         tag.setFont(QFont("Noto Sans", 9, QFont.DemiBold))
         top_bar.addWidget(tag)
@@ -211,7 +211,7 @@ class WorldClock(QWidget):
             self.country_combo.addItem(f"{flag_emoji(code)}  {name}", (tz, code))
         self.country_combo.setFont(QFont("Noto Sans", 15, QFont.DemiBold))
         self.country_combo.setCursor(QCursor(Qt.PointingHandCursor))
-        self.country_combo.setToolTip("Clique para escolher o país")
+        self.country_combo.setToolTip("Click to change country")
         self.country_combo.setStyleSheet(f"""
             QComboBox {{
                 color: {TEXT_PRIMARY};
@@ -307,8 +307,8 @@ class WorldClock(QWidget):
         self.diff_badge.setText(format_diff(now_target, now_brazil))
 
     # ---------- drag to move (frameless window) ----------
-    # No Wayland, QWidget.move() não reposiciona janelas sem borda: o
-    # compositor só aceita mover via pedido nativo de "system move".
+    # On Wayland, QWidget.move() does not reposition borderless windows: the
+    # compositor only allows moving via a native "system move" request.
     def mousePressEvent(self, event):
         if event.button() != Qt.LeftButton:
             return
@@ -316,7 +316,7 @@ class WorldClock(QWidget):
         if handle is not None and handle.startSystemMove():
             event.accept()
             return
-        # fallback (X11 antigo / compositores sem suporte a startSystemMove)
+        # fallback (older X11 / compositors without startSystemMove support)
         self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
         event.accept()
 
