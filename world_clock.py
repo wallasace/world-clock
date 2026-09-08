@@ -2,18 +2,67 @@
 """Minimalist world clock: compares the time of two countries you choose."""
 import sys
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, QSettings, Signal
-from PySide6.QtGui import QFont, QColor, QCursor
+from PySide6.QtGui import QFont, QFontDatabase, QColor, QCursor, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QCompleter, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QComboBox, QPushButton, QGraphicsDropShadowEffect, QFrame, QSizePolicy,
 )
 
+FONTS_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
 
-def flag_emoji(country_code: str) -> str:
-    return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in country_code.upper())
+
+def load_bundled_fonts() -> None:
+    """Register the bundled Noto Sans / Noto Sans Mono weights so the app
+    looks the same everywhere, instead of depending on what's installed on
+    the system — Windows doesn't ship Noto Sans, so without this the app
+    silently fell back to a generic font there."""
+    for filename in (
+        "NotoSans-Regular.ttf",
+        "NotoSans-SemiBold.ttf",
+        "NotoSansMono-Medium.ttf",
+        "NotoSansMono-SemiBold.ttf",
+    ):
+        QFontDatabase.addApplicationFont(str(FONTS_DIR / filename))
+
+# Flag glyphs (regional-indicator emoji) don't reliably render as actual
+# flags in Qt on Windows — most fonts/backends fall back to showing the two
+# letters instead of composing a flag picture. Bundled PNGs (from
+# github.com/lipis/flag-icons, MIT) sidestep that entirely and look the same
+# on every platform.
+FLAGS_DIR = Path(__file__).resolve().parent / "assets" / "flags"
+_flag_pixmap_cache: dict[tuple[str, int], QPixmap] = {}
+
+
+def flag_pixmap(country_code: str, height: int) -> QPixmap | None:
+    """A rounded-corner flag pixmap for `country_code` at the given pixel
+    height (4:3 aspect ratio), or None if no asset exists for that code."""
+    key = (country_code.lower(), height)
+    if key in _flag_pixmap_cache:
+        return _flag_pixmap_cache[key]
+
+    source = QPixmap(str(FLAGS_DIR / f"{country_code.lower()}.png"))
+    if source.isNull():
+        return None
+
+    width = round(height * 4 / 3)
+    scaled = source.scaled(width, height, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+
+    rounded = QPixmap(scaled.size())
+    rounded.fill(Qt.transparent)
+    painter = QPainter(rounded)
+    painter.setRenderHint(QPainter.Antialiasing)
+    path = QPainterPath()
+    path.addRoundedRect(0, 0, width, height, 2, 2)
+    painter.setClipPath(path)
+    painter.drawPixmap(0, 0, scaled)
+    painter.end()
+
+    _flag_pixmap_cache[key] = rounded
+    return rounded
 
 
 DEFAULT_ORIGIN_TZ = "America/Sao_Paulo"
@@ -141,6 +190,43 @@ def popup_style() -> str:
     """
 
 
+class HoverButton(QPushButton):
+    """A QPushButton with the hover state applied by hand, via polling the
+    cursor position instead of Enter/Leave events.
+
+    QSS `:hover` never repaints on this window on Windows — a known Qt issue
+    with Qt.FramelessWindowHint + WA_TranslucentBackground windows there,
+    where the native style's hover highlight silently never appears even
+    though the same stylesheet works fine on Linux. Driving the two style
+    states explicitly (enterEvent/leaveEvent) fixed that, but only until the
+    country-search popup (QComboBox dropdown / QCompleter popup) opens once:
+    afterwards Windows stops delivering real Enter/Leave events to this
+    button at all, on this frameless+translucent window, until the app is
+    restarted — the popup's implicit mouse grab seems to permanently disrupt
+    this window's native hover/mouse-tracking registration. Polling the
+    cursor position sidesteps that entirely, since it doesn't depend on
+    those events being delivered."""
+
+    def __init__(self, text: str, base_style: str, hover_style: str):
+        super().__init__(text)
+        self._base_style = base_style
+        self._hover_style = hover_style
+        self._hovered = False
+        self.setStyleSheet(self._base_style)
+
+        self._poll_timer = QTimer(self)
+        self._poll_timer.setInterval(80)
+        self._poll_timer.timeout.connect(self._check_hover)
+        self._poll_timer.start()
+
+    def _check_hover(self):
+        hovered = self.rect().contains(self.mapFromGlobal(QCursor.pos()))
+        if hovered == self._hovered:
+            return
+        self._hovered = hovered
+        self.setStyleSheet(self._hover_style if hovered else self._base_style)
+
+
 class ClickableLabel(QLabel):
     clicked = Signal()
 
@@ -165,18 +251,49 @@ class ClickableLabel(QLabel):
         super().mouseReleaseEvent(event)
 
 
-def flag_for_text(text: str) -> str:
-    """The flag for the country matching `text` (exact match wins over a
+class ChevronLabel(ClickableLabel):
+    """A small down-chevron, hand-drawn instead of rendered from a Unicode
+    glyph ("⌄", U+2304). Noto Sans doesn't cover that codepoint, so Qt
+    silently substituted a fallback font for just that one character — a
+    thin arrow on Windows, a noticeably wider/bolder one on Linux. Drawing
+    it ourselves makes it look identical on both."""
+
+    def __init__(self, color: str, size: int):
+        super().__init__("")
+        self._color = QColor(color)
+        self.setFixedSize(size, size)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        pen = QPen(self._color)
+        pen.setWidthF(max(1.4, self.width() * 0.13))
+        pen.setCapStyle(Qt.RoundCap)
+        pen.setJoinStyle(Qt.RoundJoin)
+        painter.setPen(pen)
+        w, h = self.width(), self.height()
+        margin = w * 0.24
+        top_y = h * 0.4
+        bottom_y = h * 0.62
+        path = QPainterPath()
+        path.moveTo(margin, top_y)
+        path.lineTo(w / 2, bottom_y)
+        path.lineTo(w - margin, top_y)
+        painter.drawPath(path)
+
+
+def country_code_for_text(text: str) -> str:
+    """The ISO code for the country matching `text` (exact match wins over a
     "contains" match), or "" if nothing matches — e.g. an empty field."""
     query = text.strip().lower()
     if not query:
         return ""
     for name, _tz, code in COUNTRIES:
         if name.lower() == query:
-            return flag_emoji(code)
+            return code
     for name, _tz, code in COUNTRIES:
         if query in name.lower():
-            return flag_emoji(code)
+            return code
     return ""
 
 
@@ -188,21 +305,22 @@ def combo_row(combo: QComboBox, text_color: str) -> QHBoxLayout:
     row = QHBoxLayout()
     row.setSpacing(8)
 
+    flag_height = round(combo.font().pointSize() * 1.1)
     flag_label = QLabel()
-    flag_label.setFont(combo.font())
+    flag_label.setFixedSize(round(flag_height * 4 / 3), flag_height)
     row.addWidget(flag_label)
 
     def sync_flag(text):
-        flag_label.setText(flag_for_text(text))
+        code = country_code_for_text(text)
+        pixmap = flag_pixmap(code, flag_height) if code else None
+        flag_label.setPixmap(pixmap if pixmap is not None else QPixmap())
 
     combo.lineEdit().textChanged.connect(sync_flag)
     sync_flag(combo.currentText())
 
     combo.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
     row.addWidget(combo)
-    chevron = ClickableLabel("⌄")
-    chevron.setFont(combo.font())
-    chevron.setStyleSheet(f"color: {text_color};")
+    chevron = ChevronLabel(text_color, size=round(combo.font().pointSize() * 1.3))
     chevron.setToolTip("Browse all countries")
 
     chevron.clicked.connect(combo.showPopup)
@@ -238,8 +356,42 @@ class _ComboSearchFocusHandler(QObject):
         combo.lineEdit().setText(combo.itemText(combo.currentIndex()))
 
 
+class _DropDownBelowFilter(QObject):
+    """Re-pins a popup directly below `anchor` right after it's shown.
+
+    Qt decides whether a popup opens above or below its anchor based on
+    available screen space — but on this frameless/translucent window that
+    calculation sometimes comes out wrong on Windows (the popup flips
+    upward with plenty of room left below), even though the exact same code
+    opens downward on Linux. Overriding the position after the fact sidesteps
+    whatever's miscounted, rather than trying to out-guess Qt's placement."""
+
+    def __init__(self, anchor: QWidget, parent=None):
+        super().__init__(parent)
+        self._anchor = anchor
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Show:
+            QTimer.singleShot(0, lambda: self._pin(obj))
+        return False
+
+    def _pin(self, popup: QWidget):
+        pos = self._anchor.mapToGlobal(self._anchor.rect().bottomLeft())
+        popup.window().move(pos)
+
+
+class CountryCombo(QComboBox):
+    """A QComboBox whose popup always drops down, never up — see
+    _DropDownBelowFilter."""
+
+    def showPopup(self):
+        super().showPopup()
+        pos = self.mapToGlobal(self.rect().bottomLeft())
+        self.view().window().move(pos)
+
+
 def make_country_combo(font_size: int, text_color: str) -> QComboBox:
-    combo = QComboBox()
+    combo = CountryCombo()
     combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
     for name, tz, code in COUNTRIES:
         combo.addItem(name, (tz, code))
@@ -268,6 +420,7 @@ def make_country_combo(font_size: int, text_color: str) -> QComboBox:
     completer.popup().setFont(combo.font())
     completer.popup().setStyleSheet(popup_style())
     completer.popup().setMinimumWidth(combo.view().minimumWidth())
+    completer.popup().installEventFilter(_DropDownBelowFilter(line_edit, combo))
 
     def commit(text):
         idx = combo.findText(text, Qt.MatchFixedString)
@@ -340,10 +493,7 @@ class WorldClock(QWidget):
         top_bar.addWidget(tag)
         top_bar.addStretch()
 
-        close_btn = QPushButton("×")
-        close_btn.setFixedSize(26, 26)
-        close_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        close_btn.setStyleSheet(f"""
+        close_btn_base = f"""
             QPushButton {{
                 color: {TEXT_MUTED};
                 background: transparent;
@@ -351,11 +501,19 @@ class WorldClock(QWidget):
                 font-size: 18px;
                 border-radius: 13px;
             }}
-            QPushButton:hover {{
+        """
+        close_btn_hover = f"""
+            QPushButton {{
                 color: {TEXT_PRIMARY};
                 background: rgba(255,255,255,0.08);
+                border: none;
+                font-size: 18px;
+                border-radius: 13px;
             }}
-        """)
+        """
+        close_btn = HoverButton("×", close_btn_base, close_btn_hover)
+        close_btn.setFixedSize(26, 26)
+        close_btn.setCursor(QCursor(Qt.PointingHandCursor))
         close_btn.clicked.connect(self.close)
         top_bar.addWidget(close_btn)
         root.addLayout(top_bar)
@@ -500,6 +658,7 @@ class WorldClock(QWidget):
 
 def main():
     app = QApplication(sys.argv)
+    load_bundled_fonts()
     win = WorldClock()
     win.show()
     sys.exit(app.exec())

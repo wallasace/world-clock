@@ -1,1 +1,2 @@
 PySide6>=6.5
+tzdata>=2023.3; sys_platform == "win32"
