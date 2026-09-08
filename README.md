@@ -8,7 +8,7 @@ A minimalist desktop clock for Linux (KDE Plasma) that shows the time of a chose
 
 - Real-time clock for the selected target country, next to your chosen home country's time
 - Both the target and the home country can be changed independently
-- Time zone (UTC±X) and hour difference calculated automatically (accounts for daylight saving time)
+- Time zone (UTC±X) shown for both countries, plus the hour difference between them, calculated automatically (accounts for daylight saving time)
 - About 40 pre-loaded countries, each with a flag, in a searchable picker
 - Dark, minimalist design with rounded corners and a soft shadow
 - Borderless, draggable window, optionally always on top
